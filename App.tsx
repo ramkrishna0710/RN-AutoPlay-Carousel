@@ -1,118 +1,139 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+import { StatusBar, StyleSheet, useWindowDimensions, View, ViewToken } from 'react-native'
+import React, { useEffect, useRef, useState } from 'react'
+import { movies } from './src/data/Movies'
+import BackImage from './src/components/BackImage'
+import Gradient from './src/components/Gradient'
+import RenderItem from './src/components/RenderItem'
+import TextInfo from './src/components/TextInfo'
+import WatchNowButton from './src/components/WatchNowButton'
+import PlusButton from './src/components/PlusButton'
+import Pagination from './src/components/Pagination'
+import Animated, { scrollTo, useAnimatedRef, useAnimatedScrollHandler, useDerivedValue, useSharedValue } from 'react-native-reanimated'
 
-import React from 'react';
-import type {PropsWithChildren} from 'react';
-import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
-  View,
-} from 'react-native';
+console.warn();
+const App = () => {
+  const [data, setData] = useState(movies)
+  const { width } = useWindowDimensions();
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [paginationIndex, setPaginationIndex] = useState(0);
+  const x = useSharedValue(0);
+  const ref = useAnimatedRef<Animated.FlatList<any>>();
+  const interval = useRef<NodeJS.Timeout>();
+  const [isAutoPlay, setIsAutoPlay] = useState(true)
+  const offset = useSharedValue(0);
 
-import {
-  Colors,
-  DebugInstructions,
-  Header,
-  LearnMoreLinks,
-  ReloadInstructions,
-} from 'react-native/Libraries/NewAppScreen';
+  const onViewableItemsChanged = ({ viewableItems, }: { viewableItems: ViewToken[] }) => {
+    if (viewableItems[0].index !== undefined && viewableItems[0].index !== null) {
+      setCurrentIndex(viewableItems[0].index);
+      setPaginationIndex(viewableItems[0].index % movies.length)
+    }
+  }
 
-type SectionProps = PropsWithChildren<{
-  title: string;
-}>;
+  const viewabilityConfig = {
+    itemVisiblePercentThreshold: 50,
+  }
 
-function Section({children, title}: SectionProps): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
+  const viewabilityConfigCallbackPairs = useRef([
+    { viewabilityConfig, onViewableItemsChanged },
+  ]);
+
+  const onScroll = useAnimatedScrollHandler({
+    onScroll: e => {
+      x.value = e.contentOffset.x;
+      // console.log(e.contentOffset.x);
+    },
+    onMomentumEnd: e => {
+      offset.value = e.contentOffset.x;
+    }
+  });
+
+  useDerivedValue(() => {
+    scrollTo(ref, offset.value, 0, true)
+  })
+
+  useEffect(() => {
+    if (isAutoPlay) {
+      interval.current = setInterval(() => {
+        offset.value = offset.value + width
+      }, 4000);
+    } else {
+      clearInterval(interval.current)
+    }
+    return () => {
+      clearInterval(interval.current)
+    }
+  }, [isAutoPlay, offset, width])
+
   return (
-    <View style={styles.sectionContainer}>
-      <Text
-        style={[
-          styles.sectionTitle,
-          {
-            color: isDarkMode ? Colors.white : Colors.black,
-          },
-        ]}>
-        {title}
-      </Text>
-      <Text
-        style={[
-          styles.sectionDescription,
-          {
-            color: isDarkMode ? Colors.light : Colors.dark,
-          },
-        ]}>
-        {children}
-      </Text>
-    </View>
-  );
-}
-
-function App(): React.JSX.Element {
-  const isDarkMode = useColorScheme() === 'dark';
-
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
-  };
-
-  return (
-    <SafeAreaView style={backgroundStyle}>
-      <StatusBar
-        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
-        backgroundColor={backgroundStyle.backgroundColor}
+    <View style={styles.container}>
+      <StatusBar translucent backgroundColor={'transparent'} />
+      {
+        data.map((item, index) => {
+          return (
+            <View key={index}>
+              {currentIndex === index &&
+                <BackImage index={index} item={item} x={x} />
+              }
+            </View>
+          )
+        })
+      }
+      <Gradient />
+      <Animated.FlatList
+        onScrollBeginDrag={() => {
+          setIsAutoPlay(false)
+        }}
+        onScrollEndDrag={() => {
+          setIsAutoPlay(true)
+        }}
+        ref={ref}
+        onScroll={onScroll}
+        style={{ height: width, flexGrow: 0 }}
+        horizontal={true}
+        bounces={false}
+        pagingEnabled={true}
+        scrollEventThrottle={16}
+        showsHorizontalScrollIndicator={false}
+        viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs.current}
+        onEndReachedThreshold={0.5}
+        onEndReached={() => setData([...data, ...movies])}
+        data={data}
+        keyExtractor={(_, index) => `list_item${index}`}
+        renderItem={({ item, index }) => {
+          return <RenderItem item={item} index={index} x={x} />
+        }}
       />
-      <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
-        style={backgroundStyle}>
-        <Header />
-        <View
-          style={{
-            backgroundColor: isDarkMode ? Colors.black : Colors.white,
-          }}>
-          <Section title="Step One">
-            Edit <Text style={styles.highlight}>App.tsx</Text> to change this
-            screen and then come back to see your edits.
-          </Section>
-          <Section title="See Your Changes">
-            <ReloadInstructions />
-          </Section>
-          <Section title="Debug">
-            <DebugInstructions />
-          </Section>
-          <Section title="Learn More">
-            Read the docs to discover what to do next:
-          </Section>
-          <LearnMoreLinks />
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
+      {
+        data.map((item, index) => {
+          return (
+            <View key={index}>
+              {currentIndex === index &&
+                <TextInfo index={index} item={item} x={x} />
+              }
+            </View>
+          )
+        })
+      }
+      <View style={styles.btnContainer}>
+        <WatchNowButton />
+        <PlusButton />
+      </View>
+      <Pagination paginationIndex={paginationIndex} />
+    </View>
+  )
 }
+
+export default App
 
 const styles = StyleSheet.create({
-  sectionContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+  container: {
+    flex: 1,
+    backgroundColor: '#0f1014'
   },
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-  },
-  sectionDescription: {
-    marginTop: 8,
-    fontSize: 18,
-    fontWeight: '400',
-  },
-  highlight: {
-    fontWeight: '700',
-  },
-});
-
-export default App;
+  btnContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 14
+  }
+})
